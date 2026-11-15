@@ -1,4 +1,4 @@
-name: Economic surprise tracker
+name: Economic news
 on:
   workflow_dispatch:
   schedule:
@@ -28,7 +28,7 @@ jobs:
       - if: steps.localtime.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: economic-surprises
+          name: economic-news
           path: |
             surprise_log.json
             daily_brief.txt
