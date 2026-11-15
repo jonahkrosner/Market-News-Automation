@@ -2,7 +2,7 @@
 
 Two independent, review-only automations for a macro desk.
 
-## 1. Economic surprise tracker
+## 1. Economic news
 Reads `releases.json`, fetches published FRED observations (when `FRED_API_KEY` is configured), compares actual versus manually entered forecasts, and estimates market reaction using Yahoo Finance. Outputs `surprise_log.json`, `daily_brief.txt`, and `impact_rankings.csv`.
 
 **Important:** FRED data is often revised and is not a point-in-time economic release feed. The tracker will not claim a release-time actual when the release's value or unit cannot be reliably matched. For a production desk, use a timestamped release calendar with original vintage values and a licensed consensus feed. 8:30 ET releases precede US cash equity trading; Yahoo intraday SPX coverage may be absent and is reported as unavailable, never fabricated.
