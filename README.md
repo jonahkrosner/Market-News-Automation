@@ -25,7 +25,10 @@ Populate `releases.json` with confirmed dates, forecasts, units, and the appropr
 ## GitHub Actions
 - `overnight-digest.yml`: scheduled at **7:00 AM New York time**, using GitHub's timezone-aware cron; manual run supported.
 - `economic-surprises.yml`: checks at 10:45 AM New York time on weekdays, plus manual runs. Data availability is not guaranteed at that time.
-- Both upload output as downloadable workflow artifacts. They **do not send email, post to Slack, commit generated files, or trade**.
+- Both upload output as downloadable workflow artifacts. They email the generated report to the configured iCloud address after successful report generation, and also upload artifacts. They **do not post to Slack, commit generated files, or trade**.
 - Set `FRED_API_KEY` in GitHub repository **Settings → Secrets and variables → Actions** for the economic tracker. Without it, the tracker skips FRED retrieval and explains why.
 
 GitHub Actions schedules may run late. The digest always computes its previous-night window from New York calendar time, not runner UTC time.
+
+## Email delivery
+Set repository Actions secrets `EMAIL_ADDRESS` (your iCloud email) and `EMAIL_APP_PASSWORD` (Apple app-specific password). Each workflow sends from and to `EMAIL_ADDRESS` using iCloud SMTP over TLS on port 465. The digest sends its Markdown report, and Economic News sends the daily brief. Both include a text attachment. Manual workflow dispatch also sends a report; avoid repeatedly dispatching if you don't want duplicate messages. Test email code locally with `python -m unittest discover -s tests -v`; this mocks SMTP and does not send a real message.
