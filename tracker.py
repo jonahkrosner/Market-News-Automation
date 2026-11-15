@@ -77,7 +77,7 @@ def process(releases, history, now=None):
     existing = {r["id"] for r in history}
     for event in releases:
         try:
-            dt = datetime.fromisoformat(event["date"] + "T" + event["time"]).replace(tzinfo=ET)
+            if event.get("category") == "earnings" or not event.get("time"):\n                continue\n            dt = datetime.fromisoformat(event["date"] + "T" + event["time"]).replace(tzinfo=ET)
             event_id = event.get("id", f'{event["date"]}:{event["indicator"]}')
             if event_id in existing or dt > now:
                 continue
