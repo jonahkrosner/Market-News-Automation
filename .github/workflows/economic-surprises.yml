@@ -2,8 +2,7 @@ name: Economic surprise tracker
 on:
   workflow_dispatch:
   schedule:
-    - cron: '45 10 * * 1-5'
-      timezone: America/New_York
+    - cron: '45 14,15 * * 1-5'
 permissions:
   contents: read
 jobs:
@@ -16,10 +15,16 @@ jobs:
           python-version: '3.12'
           cache: pip
       - run: pip install -r requirements.txt
-      - run: python tracker.py
+      - name: Check New York local schedule hour
+        id: localtime
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "$(TZ=America/New_York date +%H)" = "10" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; else echo "run=false" >> "$GITHUB_OUTPUT"; fi
+      - if: steps.localtime.outputs.run == 'true'
+        run: python tracker.py
         env:
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
-      - uses: actions/upload-artifact@v4
+      - if: steps.localtime.outputs.run == 'true'
+        uses: actions/upload-artifact@v4
         with:
           name: economic-surprises
           path: |
