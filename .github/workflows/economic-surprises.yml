@@ -34,3 +34,9 @@ jobs:
             daily_brief.txt
             impact_rankings.csv
             upcoming_calendar.md
+      - name: Email economic report
+        if: steps.localtime.outputs.run == 'true'
+        run: python email_reports.py economic
+        env:
+          EMAIL_ADDRESS: ${{ secrets.EMAIL_ADDRESS }}
+          EMAIL_APP_PASSWORD: ${{ secrets.EMAIL_APP_PASSWORD }}
