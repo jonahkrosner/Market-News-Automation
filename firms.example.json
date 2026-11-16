@@ -1,0 +1,24 @@
+{
+  "firms": [
+    {
+      "id": "demo-ria",
+      "name": "Example Wealth Advisors",
+      "interests": [
+        "Federal Reserve",
+        "earnings",
+        "technology",
+        "Treasury"
+      ],
+      "tickers": [
+        "NVDA",
+        "MSFT"
+      ],
+      "branding": {
+        "primary_color": "#14253d"
+      },
+      "delivery": {
+        "mode": "approval_required"
+      }
+    }
+  ]
+}
