@@ -32,3 +32,14 @@ GitHub Actions schedules may run late. The digest always computes its previous-n
 
 ## Email delivery
 Set repository Actions secrets `EMAIL_ADDRESS` (your iCloud email) and `EMAIL_APP_PASSWORD` (Apple app-specific password). Each workflow sends from and to `EMAIL_ADDRESS` using iCloud SMTP over TLS on port 465. The digest sends its Markdown report, and Economic News sends the daily brief. Both include a text attachment. Manual workflow dispatch also sends a report; avoid repeatedly dispatching if you don't want duplicate messages. Test email code locally with `python -m unittest discover -s tests -v`; this mocks SMTP and does not send a real message.
+
+## HTTPS email delivery (recommended for GitHub Actions)
+GitHub-hosted runners may time out when connecting to iCloud SMTP on port 465. The email script now supports Resend's HTTPS API as an alternative. This requires a Resend account, a verified sending domain, and an API key; an iCloud address cannot be used as the sender unless the sending domain is verified and authorized by the provider.
+
+In **Settings → Secrets and variables → Actions** configure:
+- **Repository variables:** `EMAIL_PROVIDER=resend`, `EMAIL_RECIPIENT=jonahkrosner@icloud.com`, and `RESEND_FROM_EMAIL=digest@YOUR_VERIFIED_DOMAIN`.
+- **Repository secret:** `RESEND_API_KEY` with the API key from Resend.
+
+The existing `EMAIL_ADDRESS` and `EMAIL_APP_PASSWORD` remain available for SMTP mode (`EMAIL_PROVIDER=smtp`, or unset). The Resend API mode sends HTML and text alternatives; the original local report remains in the downloadable GitHub Actions artifact. The SMTP mode continues to attach the report. No emails will be delivered through Resend until you configure and verify the sender.
+
+Run `python -m unittest discover -s tests -v` before merging. To preview without sending, run `EMAIL_PROVIDER=resend EMAIL_RECIPIENT=you@example.com RESEND_FROM_EMAIL=digest@verified.example python email_reports.py overnight --dry-run` after generating the report.
