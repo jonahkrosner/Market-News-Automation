@@ -39,6 +39,22 @@ class EmailTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             build_message("overnight", "a@b.com", "a@b.com", self.root)
 
+    def test_resend_uses_https(self):
+        (self.root / "overnight_digest.md").write_text("# News\n", encoding="utf-8")
+        env = {"EMAIL_PROVIDER": "resend", "EMAIL_RECIPIENT": "reader@example.com",
+               "RESEND_FROM_EMAIL": "digest@verified.example",
+               "RESEND_API_KEY": "test-key"}
+        from unittest.mock import MagicMock
+        response = MagicMock()
+        response.status = 200
+        response.__enter__.return_value = response
+        with patch.dict(os.environ, env, clear=True):
+            with patch("email_reports.urllib.request.urlopen", return_value=response) as api:
+                with patch("email_reports.smtplib.SMTP_SSL") as smtp:
+                    send("overnight", root=self.root)
+                    self.assertEqual(api.call_count, 1)
+                    smtp.assert_not_called()
+
     def test_dry_run_never_uses_smtp(self):
         with patch.dict(os.environ, {"EMAIL_ADDRESS": "sender@icloud.com",
                                      "EMAIL_RECIPIENT": "reader@example.com"}, clear=True):
