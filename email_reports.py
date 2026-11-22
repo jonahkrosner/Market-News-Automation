@@ -5,6 +5,9 @@ import os
 import re
 import smtplib
 import ssl
+import json
+import urllib.error
+import urllib.request
 from email.message import EmailMessage
 from pathlib import Path
 from urllib.parse import urlparse
@@ -89,24 +92,60 @@ def build_message(kind, sender, recipient, root=ROOT):
 def send(kind, root=ROOT, dry_run=False):
     sender = os.environ.get("EMAIL_ADDRESS", "").strip()
     recipient = os.environ.get("EMAIL_RECIPIENT", "").strip() or sender
-    if not sender:
-        raise ValueError("EMAIL_ADDRESS is required")
+    provider = os.environ.get("EMAIL_PROVIDER", "smtp").strip().lower()
+    if provider not in ("smtp", "resend"):
+        raise ValueError("EMAIL_PROVIDER must be smtp or resend")
+    if not recipient:
+        raise ValueError("EMAIL_RECIPIENT or EMAIL_ADDRESS is required")
+    if provider == "smtp" and not sender:
+        raise ValueError("EMAIL_ADDRESS is required for SMTP")
+    if provider == "resend":
+        sender = os.environ.get("RESEND_FROM_EMAIL", "").strip()
+        if not sender:
+            raise ValueError("RESEND_FROM_EMAIL is required (verified sender/domain)")
     msg = build_message(kind, sender, recipient, root)
     if dry_run:
-        print(f"DRY RUN: {msg['Subject']} -> {recipient}; no email sent")
+        print(f"DRY RUN ({provider}): {msg['Subject']} -> {recipient}; no email sent")
         return msg
-    password = os.environ.get("EMAIL_APP_PASSWORD", "").strip()
-    if not password:
-        raise ValueError("EMAIL_APP_PASSWORD secret is required")
-    try:
-        with smtplib.SMTP_SSL("smtp.mail.me.com", 465,
-                             context=ssl.create_default_context(), timeout=30) as smtp:
-            smtp.login(sender, password)
-            smtp.send_message(msg)
-    except (smtplib.SMTPException, OSError) as exc:
-        raise RuntimeError(f"Email delivery failed ({type(exc).__name__}); "
-                           "check iCloud app password and SMTP connectivity") from exc
-    print(f"Sent {kind} report to {recipient}")
+    if provider == "resend":
+        api_key = os.environ.get("RESEND_API_KEY", "").strip()
+        if not api_key:
+            raise ValueError("RESEND_API_KEY secret is required")
+        payload = json.dumps({
+            "from": sender,
+            "to": [recipient],
+            "subject": str(msg["Subject"]),
+            "text": msg.get_body(preferencelist=("plain",)).get_content(),
+            "html": msg.get_body(preferencelist=("html",)).get_content(),
+        }).encode("utf-8")
+        request = urllib.request.Request(
+            "https://api.resend.com/emails", data=payload,
+            headers={"Authorization": f"Bearer {api_key}",
+                     "Content-Type": "application/json"},
+            method="POST")
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                if response.status not in (200, 201, 202):
+                    raise RuntimeError(f"Email API returned HTTP {response.status}")
+        except urllib.error.HTTPError as exc:
+            raise RuntimeError(f"Email API rejected request (HTTP {exc.code}); "
+                               "check verified sender, recipient and API key") from exc
+        except urllib.error.URLError as exc:
+            raise RuntimeError("Email API connection failed; check HTTPS connectivity") from exc
+    else:
+        password = os.environ.get("EMAIL_APP_PASSWORD", "").strip()
+        if not password:
+            raise ValueError("EMAIL_APP_PASSWORD secret is required")
+        try:
+            with smtplib.SMTP_SSL("smtp.mail.me.com", 465,
+                                 context=ssl.create_default_context(), timeout=30) as smtp:
+                smtp.login(sender, password)
+                smtp.send_message(msg)
+        except (smtplib.SMTPException, OSError) as exc:
+            raise RuntimeError(f"SMTP delivery failed ({type(exc).__name__}); "
+                               "port 465 may be blocked on GitHub runners. "
+                               "Use EMAIL_PROVIDER=resend for HTTPS delivery") from exc
+    print(f"Sent {kind} report via {provider} to {recipient}")
     return msg
 
 if __name__ == "__main__":
