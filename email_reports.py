@@ -1,16 +1,74 @@
-"""Send generated market reports through iCloud Mail SMTP."""
+"""Send market reports through iCloud SMTP with readable HTML and text fallbacks."""
 import argparse
+import html
 import os
+import re
 import smtplib
 import ssl
+from datetime import datetime
 from email.message import EmailMessage
 from pathlib import Path
+from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parent
 REPORTS = {
     "overnight": ("Overnight Market Digest", "overnight_digest.md"),
     "economic": ("Economic News", "daily_brief.txt"),
 }
+LINK = re.compile(r"\[([^\]]+)\]\((https?://[^\s)]+)\)")
+
+def _inline(value):
+    """Escape untrusted headlines and permit only HTTP(S) Markdown links."""
+    parts = []
+    pos = 0
+    for match in LINK.finditer(value):
+        parts.append(html.escape(value[pos:match.start()]))
+        label, url = match.groups()
+        parsed = urlparse(url)
+        if parsed.scheme in ("http", "https") and parsed.netloc:
+            parts.append(f'<a href="{html.escape(url, quote=True)}">{html.escape(label)}</a>')
+        else:
+            parts.append(html.escape(match.group(0)))
+        pos = match.end()
+    parts.append(html.escape(value[pos:]))
+    return "".join(parts)
+
+def render_html(body):
+    """Render a restricted Markdown subset without trusting RSS text as HTML."""
+    blocks = []
+    in_list = False
+    for raw in body.splitlines():
+        line = raw.strip()
+        if not line:
+            if in_list:
+                blocks.append("</ul>")
+                in_list = False
+            continue
+        if line.startswith("- "):
+            if not in_list:
+                blocks.append("<ul>")
+                in_list = True
+            blocks.append(f"<li>{_inline(line[2:])}</li>")
+            continue
+        if in_list:
+            blocks.append("</ul>")
+            in_list = False
+        if line.startswith("## "):
+            blocks.append(f"<h2>{_inline(line[3:])}</h2>")
+        elif line.startswith("# "):
+            blocks.append(f"<h1>{_inline(line[2:])}</h1>")
+        else:
+            blocks.append(f"<p>{_inline(line)}</p>")
+    if in_list:
+        blocks.append("</ul>")
+    return ('<!doctype html><html><head><meta charset="utf-8"></head>'
+            '<body style="margin:0;background:#f4f6f8;font-family:Arial,sans-serif;color:#18212d">'
+            '<main style="max-width:700px;margin:24px auto;padding:28px;background:white;'
+            'border-radius:12px;line-height:1.55">'
+            + "\n".join(blocks) +
+            '<hr><p style="font-size:12px;color:#667085">Automated news digest. '
+            'Headlines and market claims are not independently verified.</p>'
+            '</main></body></html>')
 
 def build_message(kind, sender, recipient, root=ROOT):
     if kind not in REPORTS:
@@ -22,23 +80,40 @@ def build_message(kind, sender, recipient, root=ROOT):
     msg = EmailMessage()
     msg["From"] = sender
     msg["To"] = recipient
-    msg["Subject"] = title
+    msg["Subject"] = f"{title} | {datetime.now().strftime('%b %d, %Y')}"
     msg.set_content(body)
-    msg.add_attachment(body.encode("utf-8"), maintype="text", subtype="plain", filename=filename)
+    msg.add_alternative(render_html(body), subtype="html")
+    msg.add_attachment(body.encode("utf-8"), maintype="text",
+                       subtype="plain", filename=filename)
     return msg
 
-def send(kind, root=ROOT):
+def send(kind, root=ROOT, dry_run=False):
     sender = os.environ.get("EMAIL_ADDRESS", "").strip()
+    recipient = os.environ.get("EMAIL_RECIPIENT", "").strip() or sender
+    if not sender:
+        raise ValueError("EMAIL_ADDRESS is required")
+    msg = build_message(kind, sender, recipient, root)
+    if dry_run:
+        print(f"DRY RUN: {msg['Subject']} -> {recipient}; no email sent")
+        return msg
     password = os.environ.get("EMAIL_APP_PASSWORD", "").strip()
-    if not sender or not password:
-        raise ValueError("EMAIL_ADDRESS and EMAIL_APP_PASSWORD secrets are required")
-    msg = build_message(kind, sender, sender, root)
-    with smtplib.SMTP_SSL("smtp.mail.me.com", 465, context=ssl.create_default_context(), timeout=30) as smtp:
-        smtp.login(sender, password)
-        smtp.send_message(msg)
-    print(f"Sent {kind} report to {sender}")
+    if not password:
+        raise ValueError("EMAIL_APP_PASSWORD secret is required")
+    try:
+        with smtplib.SMTP_SSL("smtp.mail.me.com", 465,
+                             context=ssl.create_default_context(), timeout=30) as smtp:
+            smtp.login(sender, password)
+            smtp.send_message(msg)
+    except (smtplib.SMTPException, OSError) as exc:
+        raise RuntimeError(f"Email delivery failed ({type(exc).__name__}); "
+                           "check iCloud app password and SMTP connectivity") from exc
+    print(f"Sent {kind} report to {recipient}")
+    return msg
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("kind", choices=REPORTS)
-    send(parser.parse_args().kind)
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Build and validate message without SMTP delivery")
+    args = parser.parse_args()
+    send(args.kind, dry_run=args.dry_run)
