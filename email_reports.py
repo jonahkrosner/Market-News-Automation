@@ -5,7 +5,6 @@ import os
 import re
 import smtplib
 import ssl
-from datetime import datetime
 from email.message import EmailMessage
 from pathlib import Path
 from urllib.parse import urlparse
@@ -80,7 +79,7 @@ def build_message(kind, sender, recipient, root=ROOT):
     msg = EmailMessage()
     msg["From"] = sender
     msg["To"] = recipient
-    msg["Subject"] = f"{title} | {datetime.now().strftime('%b %d, %Y')}"
+    msg["Subject"] = title
     msg.set_content(body)
     msg.add_alternative(render_html(body), subtype="html")
     msg.add_attachment(body.encode("utf-8"), maintype="text",
