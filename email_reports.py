@@ -8,6 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 REPORTS = {
+    "morning": ("Morning Market Brief", "morning_brief.md"),
     "overnight": ("Overnight Market Digest", "overnight_digest.md"),
     "economic": ("Economic News", "daily_brief.txt"),
 }
@@ -33,7 +34,8 @@ def send(kind, root=ROOT):
     if not sender or not password:
         raise ValueError("EMAIL_ADDRESS and EMAIL_APP_PASSWORD secrets are required")
     msg = build_message(kind, sender, sender, root)
-    with smtplib.SMTP_SSL("smtp.mail.me.com", 465, context=ssl.create_default_context(), timeout=30) as smtp:
+    with smtplib.SMTP("smtp.mail.me.com", 587, timeout=30) as smtp:
+        smtp.starttls(context=ssl.create_default_context())
         smtp.login(sender, password)
         smtp.send_message(msg)
     print(f"Sent {kind} report to {sender}")

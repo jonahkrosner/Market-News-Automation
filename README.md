@@ -1,6 +1,6 @@
 # Market News Tracker
 
-Two independent, review-only automations for a macro desk.
+A daily market brief and an on-demand economic release tracker.
 
 ## 1. Economic news
 Reads `releases.json`, fetches published FRED observations (when `FRED_API_KEY` is configured), compares actual versus manually entered forecasts, and estimates market reaction using Yahoo Finance. Outputs `surprise_log.json`, `daily_brief.txt`, and `impact_rankings.csv`.
@@ -17,18 +17,18 @@ cp .env.example .env
 # Optional: put your free FRED_API_KEY in .env
 python tracker.py
 python overnight_digest.py
+python morning_brief.py
 python -m unittest discover -s tests -v
 ```
 
 Populate `releases.json` with confirmed dates, forecasts, units, and the appropriate FRED series. **Do not use example forecasts for trading.** If no valid releases are configured, the tracker generates a clear no-data brief.
 
 ## GitHub Actions
-- `overnight-digest.yml`: scheduled at **7:00 AM New York time**, using GitHub's timezone-aware cron; manual run supported.
-- `economic-surprises.yml`: checks at 10:45 AM New York time on weekdays, plus manual runs. Data availability is not guaranteed at that time.
-- Both upload output as downloadable workflow artifacts. They email the generated report to the configured iCloud address after successful report generation, and also upload artifacts. They **do not post to Slack, commit generated files, or trade**.
-- Set `FRED_API_KEY` in GitHub repository **Settings → Secrets and variables → Actions** for the economic tracker. Without it, the tracker skips FRED retrieval and explains why.
 
-GitHub Actions schedules may run late. The digest always computes its previous-night window from New York calendar time, not runner UTC time.
+- **Morning market brief** starts daily at **7:00 AM Eastern**, including weekends and holidays. It combines the overnight headlines with that day's scheduled BLS, BEA, and Census releases, all in Eastern time. It reports feed failures and uses BBC and MarketWatch as headline fallbacks. GitHub can start scheduled jobs late.
+- **Economic news** is available on demand for post-release tracking. Set `FRED_API_KEY` in repository Actions secrets for FRED retrieval.
+- Both workflows upload downloadable report artifacts. Manual dispatch of the morning brief can generate the artifact with email disabled.
 
 ## Email delivery
-Set repository Actions secrets `EMAIL_ADDRESS` (your iCloud email) and `EMAIL_APP_PASSWORD` (Apple app-specific password). Each workflow sends from and to `EMAIL_ADDRESS` using iCloud SMTP over TLS on port 465. The digest sends its Markdown report, and Economic News sends the daily brief. Both include a text attachment. Manual workflow dispatch also sends a report; avoid repeatedly dispatching if you don't want duplicate messages. Test email code locally with `python -m unittest discover -s tests -v`; this mocks SMTP and does not send a real message.
+
+Set the repository Actions secrets `EMAIL_ADDRESS` and `EMAIL_APP_PASSWORD` to the iCloud address and its Apple app-specific password. The workflows send to that address via authenticated iCloud SMTP with STARTTLS on port 587. Run the unit tests to exercise email generation and mocked SMTP without sending a real message.

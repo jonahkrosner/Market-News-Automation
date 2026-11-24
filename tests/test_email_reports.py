@@ -20,12 +20,13 @@ class EmailReportsTests(unittest.TestCase):
                 email_reports.build_message("economic", "a@icloud.com", "a@icloud.com", Path(d))
 
     @patch.dict("os.environ", {"EMAIL_ADDRESS": "me@icloud.com", "EMAIL_APP_PASSWORD": "secret"})
-    @patch("email_reports.smtplib.SMTP_SSL")
+    @patch("email_reports.smtplib.SMTP")
     def test_smtp_send(self, smtp):
         with tempfile.TemporaryDirectory() as d:
             Path(d, "daily_brief.txt").write_text("Daily report")
             email_reports.send("economic", Path(d))
             conn = smtp.return_value.__enter__.return_value
+            conn.starttls.assert_called_once()
             conn.login.assert_called_once_with("me@icloud.com", "secret")
             self.assertEqual(conn.send_message.call_count, 1)
 

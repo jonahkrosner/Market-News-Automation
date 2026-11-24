@@ -1,8 +1,6 @@
 name: Economic news
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '45 14,15 * * 1-5'
 permissions:
   contents: read
 jobs:
@@ -17,16 +15,10 @@ jobs:
       - run: pip install -r requirements.txt
       - run: python -m unittest discover -s tests -v
       - run: python event_calendar.py
-      - name: Check New York local schedule hour
-        id: localtime
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "$(TZ=America/New_York date +%H)" = "10" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; else echo "run=false" >> "$GITHUB_OUTPUT"; fi
-      - if: steps.localtime.outputs.run == 'true'
-        run: python tracker.py
+      - run: python tracker.py
         env:
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
-      - if: steps.localtime.outputs.run == 'true'
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: economic-news
           path: |
@@ -35,7 +27,6 @@ jobs:
             impact_rankings.csv
             upcoming_calendar.md
       - name: Email economic report
-        if: steps.localtime.outputs.run == 'true'
         run: python email_reports.py economic
         env:
           EMAIL_ADDRESS: ${{ secrets.EMAIL_ADDRESS }}
